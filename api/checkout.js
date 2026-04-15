@@ -468,7 +468,21 @@ export default async function handler(req, res) {
           setTimeout(function () { window.location.href = successUrl; }, 1600);
         }
 
-        // Affiche le bouton de paiement externe (fallback si widget bloqué)
+        // Affiche une popup Revolut (meilleur fallback : URL principale reste sur notre domaine)
+        function tryPopup(instance) {
+          document.getElementById("loading").classList.remove("visible");
+          if (instance && typeof instance.payWithPopup === "function") {
+            try {
+              instance.payWithPopup({ onSuccess: onSuccess, onError: function(m){ showPayError(m); } });
+            } catch (popupErr) {
+              showFallback(); // popup bloquée aussi → bouton de redirection
+            }
+          } else {
+            showFallback();
+          }
+        }
+
+        // Bouton de dernier recours (popup ET widget bloqués)
         function showFallback() {
           document.getElementById("loading").classList.remove("visible");
           if (checkoutUrl) {
@@ -493,7 +507,6 @@ export default async function handler(req, res) {
         script.crossOrigin = "anonymous";
 
         script.onerror = function () {
-          // Le script embed.js n'a pas pu être chargé
           clearWidget();
           showFallback();
         };
@@ -512,32 +525,20 @@ export default async function handler(req, res) {
               locale: "fr",
               onSuccess: onSuccess,
               onError: function (message) {
-                document.getElementById("loading").classList.remove("visible");
-                document.getElementById("payment-widget-root").style.display = "block";
                 showPayError(message);
               }
             });
+
+            // Le SDK monte le widget dans le conteneur — on l'affiche immédiatement
+            document.getElementById("loading").classList.remove("visible");
+            document.getElementById("payment-widget-root").style.display = "block";
+            document.getElementById("security-row").classList.add("visible");
+            document.getElementById("wallet-hint").classList.add("visible");
+
           } catch (e) {
             clearWidget();
             showFallback();
-            return;
           }
-
-          // Détection : après 5s, si aucun iframe présent → widget bloqué
-          setTimeout(function () {
-            var root = document.getElementById("payment-widget-root");
-            var iframe = root ? root.querySelector("iframe") : null;
-            if (!iframe || !iframe.src) {
-              clearWidget();
-              showFallback();
-            } else {
-              widgetRendered = true;
-              document.getElementById("loading").classList.remove("visible");
-              root.style.display = "block";
-              document.getElementById("security-row").classList.add("visible");
-              document.getElementById("wallet-hint").classList.add("visible");
-            }
-          }, 5000);
         };
 
         clearWidget();
