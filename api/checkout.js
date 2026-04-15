@@ -6,21 +6,12 @@ export default async function handler(req, res) {
 
   const q = req.query || {};
   const presetMontant = q.montant != null ? String(q.montant) : "";
-
-  const successUrlBase =
-    process.env.CHECKOUT_SUCCESS_URL || "https://agent-pulse.io/success";
-
+  const successUrlBase = process.env.CHECKOUT_SUCCESS_URL || "https://agent-pulse.io/success";
   const minEur = Number(process.env.CHECKOUT_MIN_EUROS ?? 0.5);
   const maxEur = Number(process.env.CHECKOUT_MAX_EUROS ?? 50000);
+  const mode   = (process.env.REVOLUT_ENV || "").toLowerCase() === "sandbox" ? "sandbox" : "prod";
 
-  const bootstrap = {
-    successUrlBase,
-    presetMontant,
-    minEur,
-    maxEur,
-    publicKey: process.env.REVOLUT_PUBLIC_KEY || "",
-    mode: (process.env.REVOLUT_ENV || "").toLowerCase() === "sandbox" ? "sandbox" : "prod",
-  };
+  const bootstrap = { successUrlBase, presetMontant, minEur, maxEur, mode };
 
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.setHeader("Cache-Control", "private, no-store");
@@ -30,225 +21,59 @@ export default async function handler(req, res) {
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Paiement sécurisé · Agent Pulse</title>
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin/>
-  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net"/>
+  <link rel="preconnect" href="https://merchant.revolut.com" crossorigin/>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      min-height: 100vh;
-      background: linear-gradient(180deg, #07080c 0%, #0b0d14 40%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 1.25rem 1rem 2rem;
-      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Inter", sans-serif;
-      color: #f1f3f8;
-    }
-    .card {
-      background: #13161f;
-      border: 0.5px solid rgba(255,255,255,0.08);
-      border-radius: 20px;
-      width: 100%;
-      max-width: 420px;
-      padding: 1.75rem 1.5rem 2rem;
-      box-shadow: 0 24px 80px rgba(0,0,0,0.45);
-    }
-    .header {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 12px;
-      padding-bottom: 1.35rem;
-      margin-bottom: 1.35rem;
-      border-bottom: 0.5px solid rgba(255,255,255,0.07);
-    }
-    .logo-wrap {
-      width: 56px; height: 56px;
-      background: #1a2233;
-      border-radius: 14px;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .brand-title {
-      font-size: 15px;
-      font-weight: 600;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: #ffffff;
-    }
-    .brand-sub {
-      font-size: 12px;
-      color: rgba(255,255,255,0.38);
-    }
-    .section-title {
-      font-size: 14px;
-      font-weight: 600;
-      color: rgba(255,255,255,0.9);
-      margin-bottom: 12px;
-    }
-    .form-group { margin-bottom: 14px; }
-    .form-group label {
-      display: block;
-      font-size: 12px;
-      color: rgba(255,255,255,0.45);
-      margin-bottom: 6px;
-    }
-    .form-group input {
-      width: 100%;
-      padding: 12px 14px;
-      border-radius: 10px;
-      border: 1px solid rgba(255,255,255,0.12);
-      background: #0d0f16;
-      color: #fff;
-      font-size: 15px;
-    }
-    .form-group input:focus {
-      outline: none;
-      border-color: rgba(106,174,237,0.5);
-    }
-    .form-group input::placeholder { color: rgba(255,255,255,0.25); }
-    .quick-label {
-      font-size: 12px;
-      color: rgba(255,255,255,0.45);
-      margin-bottom: 8px;
-    }
-    .quick-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-    .quick-btn {
-      flex: 1;
-      min-width: 76px;
-      padding: 10px 8px;
-      border-radius: 10px;
-      border: 1px solid rgba(255,255,255,0.12);
-      background: #1c2230;
-      color: #e8ecf5;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-    }
-    .quick-btn:hover { background: #252b3d; }
-    .quick-btn:active { transform: scale(0.98); }
-    .btn-primary {
-      width: 100%;
-      margin-top: 6px;
-      padding: 14px 16px;
-      background: #6aaeed;
-      color: #0b0d14;
-      font-size: 15px;
-      font-weight: 600;
-      border: none;
-      border-radius: 12px;
-      cursor: pointer;
-    }
-    .btn-primary:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
-    }
-    .btn-primary:not(:disabled):hover { filter: brightness(1.05); }
-    .amount-block { text-align: center; margin-bottom: 1rem; display: none; }
-    .amount-block.visible { display: block; }
-    .amount-label { font-size: 12px; color: rgba(255,255,255,0.38); margin-bottom: 6px; }
-    .amount-value {
-      font-size: 1.75rem;
-      font-weight: 600;
-      color: #ffffff;
-    }
-    .payer-name {
-      font-size: 12px;
-      color: rgba(255,255,255,0.35);
-      margin-top: 6px;
-    }
-    .loading-box {
-      display: none;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      padding: 1.5rem 0;
-    }
-    .loading-box.visible { display: flex; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .spinner {
-      width: 28px; height: 28px;
-      border: 2px solid rgba(106,174,237,0.15);
-      border-top: 2px solid #6aaeed;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-    .loading-text { font-size: 13px; color: rgba(255,255,255,0.32); }
-    .error-box {
-      display: none;
-      background: rgba(226, 75, 74, 0.08);
-      border: 1px solid rgba(226, 75, 74, 0.25);
-      border-radius: 12px;
-      padding: 12px 14px;
-      margin-bottom: 12px;
-      font-size: 13px;
-      color: #f0a8a7;
-      text-align: center;
-      line-height: 1.45;
-    }
-    .error-box.visible { display: block; }
-    .btn-retry {
-      margin-top: 10px;
-      width: 100%;
-      padding: 12px 16px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.12);
-      background: #1c2230;
-      color: #fff;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-    }
-    #payment-widget-root { min-height: 8px; }
-    .security-row {
-      display: none;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      margin-top: 1.25rem;
-    }
-    .security-row.visible { display: flex; }
-    .security-text { font-size: 11px; color: rgba(255,255,255,0.22); }
-    .success-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(7,8,12,0.92);
-      z-index: 1000;
-      align-items: center;
-      justify-content: center;
-      padding: 1rem;
-    }
-    .success-overlay.visible { display: flex; }
-    .success-card {
-      background: #13161f;
-      border: 0.5px solid rgba(106,174,237,0.35);
-      border-radius: 20px;
-      padding: 2rem 1.75rem;
-      max-width: 360px;
-      text-align: center;
-    }
-    .success-card h2 {
-      font-size: 1.25rem;
-      font-weight: 600;
-      margin-bottom: 0.5rem;
-      color: #a8d4ff;
-    }
-    .success-card p { font-size: 13px; color: rgba(255,255,255,0.45); }
-    .hint-pay { font-size: 11px; color: rgba(255,255,255,0.22); margin-top: 14px; text-align: center; display: none; }
-    .hint-pay.visible { display: block; }
-    #step-form.hidden { display: none; }
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{min-height:100vh;background:linear-gradient(180deg,#07080c 0%,#0b0d14 40%);display:flex;align-items:center;justify-content:center;padding:1.25rem 1rem 2rem;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#f1f3f8}
+    .card{background:#13161f;border:.5px solid rgba(255,255,255,.08);border-radius:20px;width:100%;max-width:420px;padding:1.75rem 1.5rem 2rem;box-shadow:0 24px 80px rgba(0,0,0,.45)}
+    .header{display:flex;flex-direction:column;align-items:center;gap:12px;padding-bottom:1.35rem;margin-bottom:1.35rem;border-bottom:.5px solid rgba(255,255,255,.07)}
+    .brand-title{font-size:15px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#fff}
+    .brand-sub{font-size:12px;color:rgba(255,255,255,.38)}
+    .section-title{font-size:14px;font-weight:600;color:rgba(255,255,255,.9);margin-bottom:12px}
+    .form-group{margin-bottom:14px}
+    .form-group label{display:block;font-size:12px;color:rgba(255,255,255,.45);margin-bottom:6px}
+    .form-group input{width:100%;padding:12px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0d0f16;color:#fff;font-size:15px}
+    .form-group input:focus{outline:none;border-color:rgba(106,174,237,.5)}
+    .form-group input::placeholder{color:rgba(255,255,255,.25)}
+    .quick-label{font-size:12px;color:rgba(255,255,255,.45);margin-bottom:8px}
+    .quick-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+    .quick-btn{flex:1;min-width:76px;padding:10px 8px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#1c2230;color:#e8ecf5;font-size:13px;font-weight:500;cursor:pointer}
+    .quick-btn:hover{background:#252b3d}
+    .btn-primary{width:100%;margin-top:6px;padding:14px 16px;background:#6aaeed;color:#0b0d14;font-size:15px;font-weight:600;border:none;border-radius:12px;cursor:pointer}
+    .btn-primary:disabled{opacity:.45;cursor:not-allowed}
+    .btn-primary:not(:disabled):hover{filter:brightness(1.05)}
+    .amount-block{text-align:center;margin-bottom:1rem;display:none}
+    .amount-block.visible{display:block}
+    .amount-label{font-size:12px;color:rgba(255,255,255,.38);margin-bottom:6px}
+    .amount-value{font-size:1.75rem;font-weight:600;color:#fff}
+    .payer-name{font-size:12px;color:rgba(255,255,255,.35);margin-top:6px}
+    .loading-box{display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:1.5rem 0}
+    .loading-box.visible{display:flex}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .spinner{width:28px;height:28px;border:2px solid rgba(106,174,237,.15);border-top:2px solid #6aaeed;border-radius:50%;animation:spin .8s linear infinite}
+    .loading-text{font-size:13px;color:rgba(255,255,255,.32)}
+    .error-box{display:none;background:rgba(226,75,74,.08);border:1px solid rgba(226,75,74,.25);border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:13px;color:#f0a8a7;text-align:center;line-height:1.45}
+    .error-box.visible{display:block}
+    .btn-retry{margin-top:10px;width:100%;padding:12px 16px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:#1c2230;color:#fff;font-size:14px;font-weight:500;cursor:pointer}
+    #pay-error{margin-bottom:0}
+    #payment-widget-root{min-height:8px}
+    .security-row{display:none;align-items:center;justify-content:center;gap:6px;margin-top:1.25rem}
+    .security-row.visible{display:flex}
+    .security-text{font-size:11px;color:rgba(255,255,255,.22)}
+    .success-overlay{display:none;position:fixed;inset:0;background:rgba(7,8,12,.92);z-index:1000;align-items:center;justify-content:center;padding:1rem}
+    .success-overlay.visible{display:flex}
+    .success-card{background:#13161f;border:.5px solid rgba(106,174,237,.35);border-radius:20px;padding:2rem 1.75rem;max-width:360px;text-align:center}
+    .success-card h2{font-size:1.25rem;font-weight:600;margin-bottom:.5rem;color:#a8d4ff}
+    .success-card p{font-size:13px;color:rgba(255,255,255,.45)}
+    .hint-pay{font-size:11px;color:rgba(255,255,255,.22);margin-top:14px;text-align:center;display:none}
+    .hint-pay.visible{display:block}
+    #step-form.hidden{display:none}
   </style>
 </head>
 <body>
   <div class="card">
     <div class="header">
-      <div class="logo-wrap" aria-hidden="true">
+      <div style="width:56px;height:56px;background:#1a2233;border-radius:14px;display:flex;align-items:center;justify-content:center">
         <svg width="34" height="34" viewBox="0 0 100 100" fill="none">
           <rect x="8" y="8" width="55" height="55" rx="14" fill="#6aaeed"/>
           <rect x="18" y="18" width="28" height="28" rx="7" fill="#0f1117"/>
@@ -274,7 +99,7 @@ export default async function handler(req, res) {
         <input id="lastName" name="lastName" type="text" autocomplete="family-name" required placeholder="Dupont"/>
       </div>
       <p class="quick-label">Montant (€)</p>
-      <div class="quick-row" id="quick-tarifs">
+      <div class="quick-row">
         <button type="button" class="quick-btn" data-euros="29.99">29,99 €</button>
         <button type="button" class="quick-btn" data-euros="49.99">49,99 €</button>
         <button type="button" class="quick-btn" data-euros="99.99">99,99 €</button>
@@ -300,16 +125,11 @@ export default async function handler(req, res) {
 
     <div class="error-box" id="pay-error"></div>
     <button type="button" class="btn-retry" id="btn-retry-pay" style="display:none">Réessayer</button>
-
     <div id="payment-widget-root" style="display:none"></div>
-
     <p class="hint-pay" id="wallet-hint">Carte bancaire, Apple&nbsp;Pay ou Google&nbsp;Pay selon votre appareil.</p>
-
     <div class="security-row" id="security-row">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-        stroke="rgba(255,255,255,0.22)" stroke-width="2" aria-hidden="true">
-        <rect x="3" y="11" width="18" height="11" rx="2"/>
-        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="2">
+        <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
       </svg>
       <span class="security-text">Paiement sécurisé · SSL</span>
     </div>
@@ -325,21 +145,17 @@ export default async function handler(req, res) {
   <script id="checkout-bootstrap" type="application/json">${JSON.stringify(bootstrap).replace(/</g, "\\u003c")}</script>
   <script>
     (function () {
-      var cfg     = JSON.parse(document.getElementById("checkout-bootstrap").textContent);
-      var minEur  = cfg.minEur;
-      var maxEur  = cfg.maxEur;
+      var cfg    = JSON.parse(document.getElementById("checkout-bootstrap").textContent);
+      var minEur = cfg.minEur;
+      var maxEur = cfg.maxEur;
 
       function parseEuros(str) {
-        if (str == null || str === "") return NaN;
+        if (!str) return NaN;
         return parseFloat(String(str).replace(/\\s/g, "").replace(",", "."));
       }
-
       function formatFrEUR(n) {
-        try {
-          return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(n);
-        } catch (e) {
-          return n.toFixed(2) + " €";
-        }
+        try { return new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(n); }
+        catch(e) { return n.toFixed(2) + " €"; }
       }
 
       var firstName   = document.getElementById("firstName");
@@ -347,60 +163,44 @@ export default async function handler(req, res) {
       var amountInput = document.getElementById("amount");
       if (cfg.presetMontant) amountInput.value = cfg.presetMontant;
 
-      document.querySelectorAll(".quick-btn").forEach(function (btn) {
-        btn.addEventListener("click", function () {
-          amountInput.value = btn.getAttribute("data-euros");
-        });
+      document.querySelectorAll(".quick-btn").forEach(function(btn) {
+        btn.addEventListener("click", function() { amountInput.value = btn.getAttribute("data-euros"); });
       });
 
       function showFormError(msg) {
         var el = document.getElementById("form-error");
-        el.textContent = msg;
-        el.classList.add("visible");
+        el.textContent = msg; el.classList.add("visible");
       }
       function hideFormError() {
         var el = document.getElementById("form-error");
-        el.classList.remove("visible");
-        el.textContent = "";
+        el.classList.remove("visible"); el.textContent = "";
       }
-      [firstName, lastName, amountInput].forEach(function (el) {
+      [firstName, lastName, amountInput].forEach(function(el) {
         el.addEventListener("input", hideFormError);
       });
 
-      function showPayError(text) {
+      function showPayError(msg) {
         document.getElementById("loading").classList.remove("visible");
         var box = document.getElementById("pay-error");
         var btn = document.getElementById("btn-retry-pay");
-        box.textContent = text;
-        box.classList.add("visible");
+        box.textContent = msg; box.classList.add("visible");
         btn.style.display = "block";
-        btn.onclick = function () { location.reload(); };
+        btn.onclick = function() { location.reload(); };
       }
 
-      // ── Bouton "Continuer" ────────────────────────────────────────────────
+      // ── Bouton Continuer ────────────────────────────────────────────────
       var btnContinue = document.getElementById("btn-continue");
-      btnContinue.addEventListener("click", function () {
+      btnContinue.addEventListener("click", function() {
         hideFormError();
         var fn  = firstName.value.trim();
         var ln  = lastName.value.trim();
         var eur = parseEuros(amountInput.value);
 
-        if (!fn || !ln) {
-          showFormError("Merci de renseigner le prénom et le nom.");
-          return;
-        }
+        if (!fn || !ln) { showFormError("Merci de renseigner le prénom et le nom."); return; }
         if (!Number.isFinite(eur) || eur < minEur || eur > maxEur) {
-          showFormError("Montant : entre " + minEur + " et " + maxEur + " €.");
-          return;
+          showFormError("Montant : entre " + minEur + " et " + maxEur + " €."); return;
         }
-        if (Math.round(eur * 100) < 50) {
-          showFormError("Montant minimum : 0,50 €.");
-          return;
-        }
-        if (!cfg.publicKey) {
-          showFormError("Configuration incomplète — clé publique Revolut manquante (REVOLUT_PUBLIC_KEY).");
-          return;
-        }
+        if (Math.round(eur * 100) < 50) { showFormError("Montant minimum : 0,50 €."); return; }
 
         btnContinue.disabled = true;
         document.getElementById("step-form").classList.add("hidden");
@@ -409,84 +209,72 @@ export default async function handler(req, res) {
         document.getElementById("payer-display").textContent  = fn + " " + ln;
         document.getElementById("loading").classList.add("visible");
 
-        loadWidget(fn, ln, eur);
+        // Étape 1 : créer la commande côté serveur
+        fetch("/api/create-checkout-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ firstName: fn, lastName: ln, amountEuros: eur, currency: "EUR" })
+        })
+        .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, j: j }; }); })
+        .then(function(res) {
+          if (!res.ok || !res.j.public_id) {
+            showPayError(res.j.error || "Impossible de préparer le paiement. Réessayez.");
+            return;
+          }
+          // Étape 2 : charger le widget avec le token
+          loadRevolutWidget(res.j.public_id);
+        })
+        .catch(function() { showPayError("Connexion impossible. Réessayez."); });
       });
 
-      // ── Chargement du SDK officiel Revolut et montage du widget ───────────
-      function loadWidget(fn, ln, eur) {
-        var old = document.getElementById("checkout-sdk-script");
+      // ── Chargement du widget Revolut ────────────────────────────────────
+      function loadRevolutWidget(token) {
+        var old = document.getElementById("rc-embed-script");
         if (old) old.remove();
 
         var script = document.createElement("script");
-        script.id  = "checkout-sdk-script";
-
-        // ✅ Nouveau SDK officiel Revolut (@revolut/checkout) via CDN
-        script.src   = "https://cdn.jsdelivr.net/npm/@revolut/checkout@latest/dist/index.js";
+        script.id  = "rc-embed-script";
+        script.src = "https://merchant.revolut.com/embed.js";
         script.async = true;
+        script.dataset.id = "revolut-checkout";
 
-        script.onerror = function () {
+        script.onerror = function() {
           showPayError("Impossible de charger le module de paiement. Vérifiez votre connexion.");
         };
 
-        script.onload = function () {
-          var RC = window.RevolutCheckout;
-
-          if (!RC || typeof RC.embeddedCheckout !== "function") {
+        script.onload = function() {
+          if (typeof RevolutCheckout !== "function") {
             showPayError("Module de paiement indisponible. Réessayez.");
             return;
           }
 
-          var container = document.getElementById("payment-widget-root");
+          try {
+            var instance = RevolutCheckout(token, cfg.mode);
+            var container = document.getElementById("payment-widget-root");
 
-          // ✅ API officielle 2024/2025 : embeddedCheckout + createOrder
-          RC.embeddedCheckout({
-            publicToken: cfg.publicKey,  // pk_prod_... ou pk_sandbox_...
-            mode:        cfg.mode,       // "prod" ou "sandbox"
-            target:      container,
-
-            // Le SDK appelle cette fonction pour créer la commande
-            createOrder: async function () {
-              var response = await fetch("/api/create-checkout-session", {
-                method:  "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  firstName:   fn,
-                  lastName:    ln,
-                  amountEuros: eur,
-                  currency:    "EUR"
-                })
-              });
-              var data = await response.json();
-              if (!response.ok || !data.public_id) {
-                throw new Error(data.error || "Impossible de créer la commande.");
+            instance.payments({
+              target: container,
+              // Cacher le bouton "Revolut Pay" pour ne montrer que carte/Apple/Google Pay
+              hidePaymentMethods: ["revolut_pay"],
+              locale: "fr",
+              onSuccess: function() {
+                document.getElementById("success-overlay").classList.add("visible");
+                setTimeout(function() { window.location.href = cfg.successUrlBase; }, 1600);
+              },
+              onError: function(message) {
+                showPayError(message || "Erreur de paiement. Réessayez.");
               }
-              return { publicId: data.public_id };
-            },
+            });
 
-            onSuccess: function () {
-              document.getElementById("success-overlay").classList.add("visible");
-              setTimeout(function () {
-                window.location.href = cfg.successUrlBase;
-              }, 1600);
-            },
-
-            onError: function (payload) {
-              var msg = (payload && (payload.message || payload.error)) || "Erreur de paiement.";
-              showPayError(msg);
-            },
-
-            onCancel: function () {
-              location.reload();
-            }
-
-          }).then(function () {
+            // Afficher le widget dès que le SDK a monté l'iframe
             document.getElementById("loading").classList.remove("visible");
             container.style.display = "block";
             document.getElementById("security-row").classList.add("visible");
             document.getElementById("wallet-hint").classList.add("visible");
-          }).catch(function (err) {
-            showPayError((err && err.message) || "Impossible d'initialiser le paiement.");
-          });
+
+          } catch(e) {
+            showPayError("Impossible d'initialiser le paiement. Réessayez.");
+          }
         };
 
         document.body.appendChild(script);
