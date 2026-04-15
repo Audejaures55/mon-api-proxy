@@ -1,11 +1,13 @@
 export default async function handler(req, res) {
     try {
       const { amount, currency } = req.query;
+      const apiVersion = process.env.REVOLUT_API_VERSION || "2025-12-04";
   
       const response = await fetch("https://merchant.revolut.com/api/orders", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${process.env.REVOLUT_API_KEY}`,
+          "Revolut-Api-Version": apiVersion,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
