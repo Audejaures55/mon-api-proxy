@@ -107,7 +107,6 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         amount: amountCents,
         currency: currency || "EUR",
-        capture_mode: "AUTOMATIC",
         description,
       }),
     });
