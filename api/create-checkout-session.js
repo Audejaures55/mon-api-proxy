@@ -7,7 +7,8 @@ export default async function handler(req, res) {
   }
 
   const apiKey = process.env.REVOLUT_API_KEY;
-  const apiVersion = process.env.REVOLUT_API_VERSION || "2023-09-01";
+  // ON FORCE LA VERSION ICI DIRECTEMENT
+  const apiVersion = "2023-09-01";
 
   if (!apiKey) {
     return res.status(500).json({ error: "Clé API Revolut manquante sur le serveur." });
