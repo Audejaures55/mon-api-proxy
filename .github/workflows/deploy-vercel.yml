@@ -1,0 +1,26 @@
+# Déploiement production sur Vercel à chaque push sur main.
+# À configurer une fois dans GitHub : Settings → Secrets → Actions
+#   VERCEL_TOKEN      (https://vercel.com/account/tokens)
+#   VERCEL_ORG_ID     (dossier .vercel/project.json après vercel link)
+#   VERCEL_PROJECT_ID (idem)
+
+name: Deploy Vercel
+
+on:
+  push:
+    branches: [main, master]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: ./
+          vercel-args: "--prod"
