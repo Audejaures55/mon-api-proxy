@@ -1,8 +1,3 @@
-/**
- * POST /api/create-checkout-session
- * Body JSON: { firstName, lastName, amountEuros | amount, currency? }
- * Crée une commande Revolut (montant choisi par le client) et renvoie public_id.
- */
 export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
 
@@ -12,93 +7,54 @@ export default async function handler(req, res) {
   }
 
   const apiKey = process.env.REVOLUT_API_KEY;
+  const apiVersion = process.env.REVOLUT_API_VERSION || "2023-09-01";
+
   if (!apiKey) {
-    return res.status(500).json({ error: "Configuration serveur incomplète." });
+    return res.status(500).json({ error: "Clé API Revolut manquante sur le serveur." });
   }
 
   let body = req.body;
   if (typeof body === "string") {
-    try {
-      body = JSON.parse(body || "{}");
-    } catch {
-      body = {};
-    }
-  }
-  if (!body || typeof body !== "object") body = {};
-
-  const firstName = String(body.firstName ?? "").trim().slice(0, 80);
-  const lastName = String(body.lastName ?? "").trim().slice(0, 80);
-  const currency = String(body.currency ?? "EUR")
-    .trim()
-    .toUpperCase()
-    .slice(0, 3);
-
-  const rawAmount = body.amountEuros ?? body.amount;
-  let amountEuros;
-  if (typeof rawAmount === "string") {
-    amountEuros = parseFloat(rawAmount.replace(/\s/g, "").replace(",", "."));
-  } else {
-    amountEuros = Number(rawAmount);
+    try { body = JSON.parse(body); } catch (e) { body = {}; }
   }
 
-  const minEur = Number(process.env.CHECKOUT_MIN_EUROS ?? 0.5);
-  const maxEur = Number(process.env.CHECKOUT_MAX_EUROS ?? 50000);
+  const firstName = String(body.firstName || "").trim();
+  const lastName = String(body.lastName || "").trim();
+  const amount = Number(body.amount);
+  const currency = String(body.currency || "EUR").toUpperCase();
 
-  if (!firstName || !lastName) {
-    return res.status(400).json({ error: "Le prénom et le nom sont obligatoires." });
+  if (!firstName || !lastName || !amount) {
+    return res.status(400).json({ error: "Prénom, nom et montant sont obligatoires." });
   }
 
-  if (
-    !Number.isFinite(amountEuros) ||
-    amountEuros < minEur ||
-    amountEuros > maxEur
-  ) {
-    return res.status(400).json({
-      error: `Indiquez un montant entre ${minEur} et ${maxEur} €.`,
-    });
-  }
-
-  const amountCents = Math.round(amountEuros * 100);
-  if (amountCents < 50) {
-    return res.status(400).json({ error: "Montant minimum : 0,50 €." });
-  }
-
-  const description = `Agent Pulse — ${firstName} ${lastName}`.slice(0, 255);
+  const amountCents = Math.round(amount * 100);
 
   try {
-    const response = await fetch("https://merchant.revolut.com/api/orders", {
+    const response = await fetch("https://revolut.com", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        "Authorization": `Bearer ${apiKey}`,
+        "Revolut-Api-Version": apiVersion,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
         amount: amountCents,
-        currency: currency || "EUR",
+        currency: currency,
         capture_mode: "AUTOMATIC",
-        description,
+        description: `Agent Pulse - ${firstName} ${lastName}`
       }),
     });
 
-    const data = await response.json().catch(() => ({}));
+    const data = await response.json();
 
-    if (!response.ok || !data.public_id) {
-      const msg =
-        typeof data.message === "string"
-          ? data.message.replace(/\brevolut\b/gi, "le service de paiement")
-          : "Impossible de préparer le paiement.";
-      return res.status(response.status >= 400 ? response.status : 502).json({
-        error: msg.length > 180 ? "Impossible de préparer le paiement." : msg,
+    if (!response.ok) {
+      return res.status(response.status).json({ 
+        error: data.message || "Erreur Revolut." 
       });
     }
 
-    return res.status(200).json({
-      public_id: data.public_id,
-      amountCents,
-      currency: currency || "EUR",
-      description,
-    });
-  } catch {
-    return res.status(502).json({ error: "Service temporairement indisponible." });
+    return res.status(200).json(data);
+  } catch (error) {
+    return res.status(502).json({ error: "Lien avec Revolut impossible." });
   }
 }
