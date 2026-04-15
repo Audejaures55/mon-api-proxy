@@ -6,11 +6,12 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "vercel dev",
-    "deploy": "vercel deploy --prod",
-    "deploy:preview": "vercel deploy",
-    "link": "vercel link",
-    "env:pull": "vercel env pull .env.local"
+    "dev": "node server.js",
+    "dev:watch": "nodemon server.js",
+    "deploy": "node node_modules/.bin/vercel deploy --prod",
+    "deploy:preview": "node node_modules/.bin/vercel deploy",
+    "link": "node node_modules/.bin/vercel link",
+    "env:pull": "node node_modules/.bin/vercel env pull .env.local"
   },
   "keywords": [],
   "author": "",
