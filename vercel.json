@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "api/create-checkout-session.js": {
+      "memory": 256
+    }
+  },
   "rewrites": [
     { "source": "/api/1.0/(.*)", "destination": "/api/proxy" },
     { "source": "/checkout", "destination": "/api/checkout" }
