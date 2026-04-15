@@ -15,7 +15,7 @@ app.all("/api/1.0/{*path}", async (req, res) => {
       headers: {
         "Authorization": `Bearer ${process.env.REVOLUT_API_KEY}`,
         "Content-Type": "application/json",
-        "Revolut-Api-Version": "2023-09-01"
+        "Revolut-Api-Version": "2025-12-04"
       },
       body: ["POST", "PUT", "PATCH"].includes(req.method)
         ? JSON.stringify(req.body)
