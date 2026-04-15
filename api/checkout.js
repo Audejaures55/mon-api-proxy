@@ -425,7 +425,7 @@ export default async function handler(req, res) {
               showFormError(_ref.j.error || "Impossible de continuer. Réessayez.");
               return;
             }
-            startPayment(_ref.j.public_id, _ref.j.checkout_url, fn, ln, eur);
+            startPayment(_ref.j.public_id, fn, ln, eur);
           })
           .catch(function () {
             document.getElementById("loading").classList.remove("visible");
@@ -434,23 +434,12 @@ export default async function handler(req, res) {
           });
       });
 
-      function startPayment(publicId, checkoutUrl, fn, ln, eur) {
+      function startPayment(publicId, fn, ln, eur) {
         document.getElementById("step-form").classList.add("hidden");
         document.getElementById("amount-section").classList.add("visible");
         document.getElementById("amount-display").textContent = formatFrEUR(eur);
         document.getElementById("payer-display").textContent = fn + " " + ln;
 
-        // Si Revolut fournit une checkout_url, on redirige directement
-        // C’est la méthode la plus fiable (pas de blocage par extensions)
-        if (checkoutUrl) {
-          document.getElementById("loading").classList.add("visible");
-          setTimeout(function () {
-            window.location.href = checkoutUrl;
-          }, 600);
-          return;
-        }
-
-        // Fallback : widget embarqué (si checkout_url absent)
         var successUrl = buildSuccessUrl(publicId);
 
         function showPayError(text) {
@@ -485,12 +474,12 @@ export default async function handler(req, res) {
         script.async = true;
         script.onerror = function () {
           document.getElementById("loading").classList.remove("visible");
-          showPayError("Impossible de charger le paiement.");
+          showPayError("Impossible de charger le paiement. Vérifiez votre connexion et réessayez.");
         };
         script.onload = function () {
           try {
             if (typeof RevolutCheckout !== "function") {
-              showPayError("Initialisation impossible.");
+              showPayError("Initialisation impossible. Réessayez.");
               document.getElementById("loading").classList.remove("visible");
               return;
             }
