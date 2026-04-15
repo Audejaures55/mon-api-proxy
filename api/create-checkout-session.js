@@ -111,9 +111,12 @@ export default async function handler(req, res) {
     let data = {};
     try { data = JSON.parse(rawText); } catch { /* non-JSON */ }
 
-    if (!response.ok || !data.public_id) {
-      // Renvoie le message EXACT de Revolut pour faciliter le debug
+    // L'API 2024-09-01 retourne 'token', les versions antérieures 'public_id'
+    const publicId = data.public_id || data.token;
+
+    if (!response.ok || !publicId) {
       const revolut_error = data.message || data.error || rawText || "Erreur inconnue Revolut";
+      console.error(`[checkout] ❌ Pas de public_id/token. Revolut ${response.status}:`, revolut_error);
       return res.status(502).json({
         error: `Revolut: ${revolut_error}`,
         revolut_status: response.status,
@@ -121,8 +124,9 @@ export default async function handler(req, res) {
       });
     }
 
+    console.log(`[checkout] ✅ OK! public_id/token: ${publicId}`);
     return res.status(200).json({
-      public_id:   data.public_id,
+      public_id:   publicId,
       amountCents,
       currency,
       description,
