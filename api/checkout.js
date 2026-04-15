@@ -425,7 +425,7 @@ export default async function handler(req, res) {
               showFormError(_ref.j.error || "Impossible de continuer. Réessayez.");
               return;
             }
-            startPayment(_ref.j.public_id, fn, ln, eur);
+            startPayment(_ref.j.public_id, _ref.j.checkout_url, fn, ln, eur);
           })
           .catch(function () {
             document.getElementById("loading").classList.remove("visible");
@@ -434,12 +434,23 @@ export default async function handler(req, res) {
           });
       });
 
-      function startPayment(publicId, fn, ln, eur) {
+      function startPayment(publicId, checkoutUrl, fn, ln, eur) {
         document.getElementById("step-form").classList.add("hidden");
         document.getElementById("amount-section").classList.add("visible");
         document.getElementById("amount-display").textContent = formatFrEUR(eur);
         document.getElementById("payer-display").textContent = fn + " " + ln;
 
+        // Si Revolut fournit une checkout_url, on redirige directement
+        // C’est la méthode la plus fiable (pas de blocage par extensions)
+        if (checkoutUrl) {
+          document.getElementById("loading").classList.add("visible");
+          setTimeout(function () {
+            window.location.href = checkoutUrl;
+          }, 600);
+          return;
+        }
+
+        // Fallback : widget embarqué (si checkout_url absent)
         var successUrl = buildSuccessUrl(publicId);
 
         function showPayError(text) {
@@ -495,7 +506,7 @@ export default async function handler(req, res) {
               }
             });
           } catch (e) {
-            showPayError("Impossible d'initialiser le paiement.");
+            showPayError("Erreur d’initialisation du paiement.");
           }
           document.getElementById("loading").classList.remove("visible");
           document.getElementById("payment-widget-root").style.display = "block";

@@ -126,7 +126,8 @@ export default async function handler(req, res) {
 
     console.log(`[checkout] ✅ OK! public_id/token: ${publicId}`);
     return res.status(200).json({
-      public_id:   publicId,
+      public_id:    publicId,
+      checkout_url: data.checkout_url || null,
       amountCents,
       currency,
       description,
