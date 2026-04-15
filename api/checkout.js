@@ -306,6 +306,9 @@ export default async function handler(req, res) {
     <button type="button" class="btn-retry" id="btn-retry-pay" style="display:none">Réessayer</button>
 
     <div id="payment-widget-root" style="display:none"></div>
+    <button type="button" class="btn-primary" id="fallback-pay-btn" style="display:none;margin-top:8px">
+      🔐 Continuer vers le paiement sécurisé
+    </button>
     <p class="hint-pay" id="wallet-hint">Carte bancaire, Apple&nbsp;Pay ou Google&nbsp;Pay selon votre appareil.</p>
 
     <div class="security-row" id="security-row">
@@ -425,7 +428,7 @@ export default async function handler(req, res) {
               showFormError(_ref.j.error || "Impossible de continuer. Réessayez.");
               return;
             }
-            startPayment(_ref.j.public_id, fn, ln, eur);
+            startPayment(_ref.j.public_id, _ref.j.checkout_url, fn, ln, eur);
           })
           .catch(function () {
             document.getElementById("loading").classList.remove("visible");
@@ -434,14 +437,16 @@ export default async function handler(req, res) {
           });
       });
 
-      function startPayment(publicId, fn, ln, eur) {
+      function startPayment(publicId, checkoutUrl, fn, ln, eur) {
         document.getElementById("step-form").classList.add("hidden");
         document.getElementById("amount-section").classList.add("visible");
         document.getElementById("amount-display").textContent = formatFrEUR(eur);
         document.getElementById("payer-display").textContent = fn + " " + ln;
 
         var successUrl = buildSuccessUrl(publicId);
+        var widgetRendered = false;
 
+        // ── Helpers ─────────────────────────────────────────────────────────
         function showPayError(text) {
           var box = document.getElementById("pay-error");
           var btn = document.getElementById("btn-retry-pay");
@@ -460,11 +465,24 @@ export default async function handler(req, res) {
 
         function onSuccess() {
           document.getElementById("success-overlay").classList.add("visible");
-          setTimeout(function () {
-            window.location.href = successUrl;
-          }, 1600);
+          setTimeout(function () { window.location.href = successUrl; }, 1600);
         }
 
+        // Affiche le bouton de paiement externe (fallback si widget bloqué)
+        function showFallback() {
+          document.getElementById("loading").classList.remove("visible");
+          if (checkoutUrl) {
+            var btn = document.getElementById("fallback-pay-btn");
+            if (btn) {
+              btn.style.display = "block";
+              btn.onclick = function () { window.location.href = checkoutUrl; };
+            }
+          } else {
+            showPayError("Module de paiement indisponible. Réessayez.");
+          }
+        }
+
+        // ── Chargement du widget embéqué ────────────────────────────────────
         document.getElementById("loading").classList.add("visible");
         document.getElementById("payment-widget-root").style.display = "none";
 
@@ -472,17 +490,22 @@ export default async function handler(req, res) {
         script.id = "checkout-embed-script";
         script.src = "https://merchant.revolut.com/embed.js";
         script.async = true;
+        script.crossOrigin = "anonymous";
+
         script.onerror = function () {
-          document.getElementById("loading").classList.remove("visible");
-          showPayError("Impossible de charger le paiement. Vérifiez votre connexion et réessayez.");
+          // Le script embed.js n'a pas pu être chargé
+          clearWidget();
+          showFallback();
         };
+
         script.onload = function () {
+          if (typeof RevolutCheckout !== "function") {
+            clearWidget();
+            showFallback();
+            return;
+          }
+
           try {
-            if (typeof RevolutCheckout !== "function") {
-              showPayError("Initialisation impossible. Réessayez.");
-              document.getElementById("loading").classList.remove("visible");
-              return;
-            }
             RevolutCheckout(publicId).payments({
               target: document.getElementById("payment-widget-root"),
               hidePaymentMethods: ["revolut_pay"],
@@ -495,12 +518,26 @@ export default async function handler(req, res) {
               }
             });
           } catch (e) {
-            showPayError("Erreur d’initialisation du paiement.");
+            clearWidget();
+            showFallback();
+            return;
           }
-          document.getElementById("loading").classList.remove("visible");
-          document.getElementById("payment-widget-root").style.display = "block";
-          document.getElementById("security-row").classList.add("visible");
-          document.getElementById("wallet-hint").classList.add("visible");
+
+          // Détection : après 5s, si aucun iframe présent → widget bloqué
+          setTimeout(function () {
+            var root = document.getElementById("payment-widget-root");
+            var iframe = root ? root.querySelector("iframe") : null;
+            if (!iframe || !iframe.src) {
+              clearWidget();
+              showFallback();
+            } else {
+              widgetRendered = true;
+              document.getElementById("loading").classList.remove("visible");
+              root.style.display = "block";
+              document.getElementById("security-row").classList.add("visible");
+              document.getElementById("wallet-hint").classList.add("visible");
+            }
+          }, 5000);
         };
 
         clearWidget();
