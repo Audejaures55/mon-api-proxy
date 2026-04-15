@@ -1,20 +1,17 @@
 async function readJsonBody(req) {
-  // Cas 1 : Vercel / Express ont déjà parsé le body en objet
+  // Cas 1 : déjà parsé en objet (Express / Vercel runtime récent)
   if (req.body !== null && req.body !== undefined && typeof req.body === "object" && !Buffer.isBuffer(req.body)) {
     return req.body;
   }
-
-  // Cas 2 : body est un Buffer (ancienne runtime Vercel)
+  // Cas 2 : Buffer
   if (Buffer.isBuffer(req.body)) {
     try { return JSON.parse(req.body.toString("utf8")); } catch { return {}; }
   }
-
-  // Cas 3 : body est déjà une chaîne JSON
+  // Cas 3 : string
   if (typeof req.body === "string" && req.body.trim()) {
     try { return JSON.parse(req.body); } catch { return {}; }
   }
-
-  // Cas 4 : body non encore lu — on streame (fallback Node.js)
+  // Cas 4 : stream brut (Vercel sans body parser)
   if (typeof req.on === "function") {
     return new Promise((resolve) => {
       const chunks = [];
@@ -26,51 +23,51 @@ async function readJsonBody(req) {
       req.on("error", () => resolve({}));
     });
   }
-
   return {};
 }
 
 export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") return res.status(204).end();
 
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Méthode non autorisée" });
   }
 
+  // ── Clé API ───────────────────────────────────────────────────────────────
   const apiKey = process.env.REVOLUT_API_KEY;
-  const apiVersion = process.env.REVOLUT_API_VERSION || "2025-12-04";
-  const isSandbox = (process.env.REVOLUT_ENV || "").toLowerCase() === "sandbox";
-  const revolutBaseUrl = isSandbox
+  if (!apiKey) {
+    console.error("[checkout] ❌ REVOLUT_API_KEY manquante");
+    return res.status(500).json({ error: "Configuration serveur incomplète : clé API manquante." });
+  }
+
+  const apiVersion = process.env.REVOLUT_API_VERSION || "2024-09-01";
+  const isSandbox  = (process.env.REVOLUT_ENV || "").toLowerCase() === "sandbox";
+  const baseUrl    = isSandbox
     ? "https://sandbox-merchant.revolut.com"
     : "https://merchant.revolut.com";
 
-  if (!apiKey) {
-    console.error("[checkout] ❌ REVOLUT_API_KEY manquante dans .env");
-    return res.status(500).json({ error: "Configuration serveur incomplète." });
-  }
-  console.log(`[checkout] 🔑 Clé: ${apiKey.slice(0, 12)}... | Env: ${isSandbox ? "sandbox" : "production"} | URL: ${revolutBaseUrl}`);
+  console.log(`[checkout] 🔑 Clé: ${apiKey.slice(0, 10)}... | Mode: ${isSandbox ? "SANDBOX" : "PROD"} | API: ${apiVersion}`);
 
+  // ── Lecture du body ───────────────────────────────────────────────────────
   let body = await readJsonBody(req);
-  if (!body || typeof body !== "object") {
-    body = {};
-  }
-  console.log("[checkout] 📦 Body reçu:", JSON.stringify(body));
+  if (!body || typeof body !== "object") body = {};
+  console.log("[checkout] 📦 Body:", JSON.stringify(body));
 
+  // ── Validation ────────────────────────────────────────────────────────────
   const firstName = String(body.firstName ?? "").trim().slice(0, 80);
-  const lastName = String(body.lastName ?? "").trim().slice(0, 80);
-  const currency = String(body.currency ?? "EUR")
-    .trim()
-    .toUpperCase()
-    .slice(0, 3);
+  const lastName  = String(body.lastName  ?? "").trim().slice(0, 80);
+  const currency  = String(body.currency  ?? "EUR").trim().toUpperCase().slice(0, 3);
 
   const rawAmount = body.amountEuros ?? body.amount;
-  let amountEuros;
-  if (typeof rawAmount === "string") {
-    amountEuros = parseFloat(rawAmount.replace(/\s/g, "").replace(",", "."));
-  } else {
-    amountEuros = Number(rawAmount);
-  }
+  let amountEuros = typeof rawAmount === "string"
+    ? parseFloat(rawAmount.replace(/\s/g, "").replace(",", "."))
+    : Number(rawAmount);
 
   const minEur = Number(process.env.CHECKOUT_MIN_EUROS ?? 0.5);
   const maxEur = Number(process.env.CHECKOUT_MAX_EUROS ?? 50000);
@@ -78,15 +75,8 @@ export default async function handler(req, res) {
   if (!firstName || !lastName) {
     return res.status(400).json({ error: "Le prénom et le nom sont obligatoires." });
   }
-
-  if (
-    !Number.isFinite(amountEuros) ||
-    amountEuros < minEur ||
-    amountEuros > maxEur
-  ) {
-    return res.status(400).json({
-      error: `Indiquez un montant entre ${minEur} et ${maxEur} €.`,
-    });
+  if (!Number.isFinite(amountEuros) || amountEuros < minEur || amountEuros > maxEur) {
+    return res.status(400).json({ error: `Montant invalide (entre ${minEur} et ${maxEur} €).` });
   }
 
   const amountCents = Math.round(amountEuros * 100);
@@ -96,41 +86,50 @@ export default async function handler(req, res) {
 
   const description = `Agent Pulse — ${firstName} ${lastName}`.slice(0, 255);
 
+  // ── Appel Revolut ─────────────────────────────────────────────────────────
+  const requestBody = {
+    amount: amountCents,
+    currency,
+    description,
+  };
+  console.log("[checkout] 🌐 Requête Revolut:", JSON.stringify(requestBody));
+
   try {
-    const response = await fetch(`${revolutBaseUrl}/api/orders`, {
+    const response = await fetch(`${baseUrl}/api/orders`, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Revolut-Api-Version": apiVersion,
-        "Content-Type": "application/json",
+        "Authorization":        `Bearer ${apiKey}`,
+        "Revolut-Api-Version":  apiVersion,
+        "Content-Type":         "application/json",
       },
-      body: JSON.stringify({
-        amount: amountCents,
-        currency: currency || "EUR",
-        description,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
-    const data = await response.json().catch(() => ({}));
+    const rawText = await response.text();
+    console.log(`[checkout] 📡 Revolut ${response.status}: ${rawText}`);
+
+    let data = {};
+    try { data = JSON.parse(rawText); } catch { /* non-JSON */ }
 
     if (!response.ok || !data.public_id) {
-      console.error(`[checkout] ❌ Revolut ${response.status}:`, JSON.stringify(data));
-      const msg =
-        typeof data.message === "string"
-          ? data.message.replace(/\brevolut\b/gi, "le service de paiement")
-          : "Impossible de préparer le paiement.";
-      return res.status(response.status >= 400 ? response.status : 502).json({
-        error: msg.length > 180 ? "Impossible de préparer le paiement." : msg,
+      // Renvoie le message EXACT de Revolut pour faciliter le debug
+      const revolut_error = data.message || data.error || rawText || "Erreur inconnue Revolut";
+      return res.status(502).json({
+        error: `Revolut: ${revolut_error}`,
+        revolut_status: response.status,
+        revolut_code: data.code ?? null,
       });
     }
 
     return res.status(200).json({
-      public_id: data.public_id,
+      public_id:   data.public_id,
       amountCents,
-      currency: currency || "EUR",
+      currency,
       description,
     });
-  } catch {
-    return res.status(502).json({ error: "Service temporairement indisponible." });
+
+  } catch (err) {
+    console.error("[checkout] 💥 Exception:", err.message);
+    return res.status(502).json({ error: `Erreur réseau : ${err.message}` });
   }
 }
