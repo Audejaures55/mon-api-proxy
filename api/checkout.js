@@ -425,7 +425,7 @@ export default async function handler(req, res) {
               showFormError(_ref.j.error || "Impossible de continuer. Réessayez.");
               return;
             }
-            startPayment(_ref.j.public_id, fn, ln, eur);
+            startPayment(_ref.j.public_id, _ref.j.checkout_url, fn, ln, eur);
           })
           .catch(function () {
             document.getElementById("loading").classList.remove("visible");
@@ -434,88 +434,18 @@ export default async function handler(req, res) {
           });
       });
 
-      function startPayment(publicId, fn, ln, eur) {
+      function startPayment(publicId, checkoutUrl, fn, ln, eur) {
+        // Affiche le résumé de la commande
         document.getElementById("step-form").classList.add("hidden");
         document.getElementById("amount-section").classList.add("visible");
         document.getElementById("amount-display").textContent = formatFrEUR(eur);
         document.getElementById("payer-display").textContent = fn + " " + ln;
-
-        var successUrl = buildSuccessUrl(publicId);
-
-        function showPayError(text) {
-          var box = document.getElementById("pay-error");
-          var btn = document.getElementById("btn-retry-pay");
-          box.textContent = userFacingPayError(text);
-          box.classList.add("visible");
-          btn.style.display = "block";
-          btn.onclick = function () { location.reload(); };
-        }
-
-        function clearWidget() {
-          var s = document.getElementById("checkout-embed-script");
-          if (s) s.remove();
-          var c = document.getElementById("payment-widget-root");
-          if (c) c.replaceChildren();
-        }
-
-        function onSuccess() {
-          document.getElementById("success-overlay").classList.add("visible");
-          setTimeout(function () {
-            window.location.href = successUrl;
-          }, 1600);
-        }
-
         document.getElementById("loading").classList.add("visible");
-        document.getElementById("payment-widget-root").style.display = "none";
 
-        // Détection blocage (extensions navigateur) : timeout 12s
-        var loadTimeout = setTimeout(function () {
-          document.getElementById("loading").classList.remove("visible");
-          showPayError("Le module de paiement n'a pas pu se charger. Désactivez votre bloqueur de pub puis réessayez.");
-        }, 12000);
-
-        var script = document.createElement("script");
-        script.id = "checkout-embed-script";
-        script.src = "https://merchant.revolut.com/embed.js";
-        script.async = true;
-
-        script.onerror = function () {
-          clearTimeout(loadTimeout);
-          document.getElementById("loading").classList.remove("visible");
-          showPayError("Le module de paiement n'a pas pu se charger. Désactivez votre bloqueur de pub puis réessayez.");
-        };
-
-        script.onload = function () {
-          clearTimeout(loadTimeout);
-          try {
-            if (typeof RevolutCheckout !== "function") {
-              showPayError("Initialisation du paiement impossible. Veuillez réessayer.");
-              document.getElementById("loading").classList.remove("visible");
-              return;
-            }
-            RevolutCheckout(publicId).payments({
-              target: document.getElementById("payment-widget-root"),
-              // Cache le bouton Revolut Pay — seule la carte est visible
-              hidePaymentMethods: ["revolut_pay"],
-              locale: "fr",
-              onSuccess: onSuccess,
-              onError: function (message) {
-                document.getElementById("loading").classList.remove("visible");
-                document.getElementById("payment-widget-root").style.display = "block";
-                showPayError(message);
-              }
-            });
-          } catch (e) {
-            showPayError("Initialisation du paiement impossible. Veuillez réessayer.");
-          }
-          document.getElementById("loading").classList.remove("visible");
-          document.getElementById("payment-widget-root").style.display = "block";
-          document.getElementById("security-row").classList.add("visible");
-          document.getElementById("wallet-hint").classList.add("visible");
-        };
-
-        clearWidget();
-        document.body.appendChild(script);
+        // Redirection vers la page de paiement sécurisée
+        setTimeout(function () {
+          window.location.href = checkoutUrl;
+        }, 800);
       }
     })();
   </script>
