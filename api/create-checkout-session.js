@@ -63,6 +63,9 @@ export default async function handler(req, res) {
   const firstName = String(body.firstName ?? "").trim().slice(0, 80);
   const lastName  = String(body.lastName  ?? "").trim().slice(0, 80);
   const currency  = String(body.currency  ?? "EUR").trim().toUpperCase().slice(0, 3);
+  const returnUrl = typeof body.returnUrl === "string" && body.returnUrl.startsWith("http")
+    ? body.returnUrl
+    : (process.env.CHECKOUT_SUCCESS_URL || "https://agent-pulse.io/success");
 
   const rawAmount = body.amountEuros ?? body.amount;
   let amountEuros = typeof rawAmount === "string"
@@ -91,6 +94,7 @@ export default async function handler(req, res) {
     amount: amountCents,
     currency,
     description,
+    merchant_redirect_url: returnUrl,  // Revolut redirige ici après paiement
   };
   console.log("[checkout] 🌐 Requête Revolut:", JSON.stringify(requestBody));
 

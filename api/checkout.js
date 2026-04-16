@@ -7,8 +7,11 @@ export default async function handler(req, res) {
   const q = req.query || {};
   const presetMontant = q.montant != null ? String(q.montant) : "";
 
+  // URL de retour après paiement (paramètre ?return_url= ou variable d'env)
   const successUrlBase =
-    process.env.CHECKOUT_SUCCESS_URL || "https://agent-pulse.io/success";
+    q.return_url ||
+    process.env.CHECKOUT_SUCCESS_URL ||
+    "https://agent-pulse.io/success";
 
   const minEur = Number(process.env.CHECKOUT_MIN_EUROS ?? 0.5);
   const maxEur = Number(process.env.CHECKOUT_MAX_EUROS ?? 50000);
@@ -414,7 +417,8 @@ export default async function handler(req, res) {
             firstName: fn,
             lastName: ln,
             amountEuros: eur,
-            currency: "EUR"
+            currency: "EUR",
+            returnUrl: cfg.successUrlBase
           })
         })
           .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
